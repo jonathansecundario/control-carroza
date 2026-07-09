@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Robot Ojos</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;overflow:hidden;touch-action:none;-webkit-tap-highlight-color:transparent}
+#app{position:relative;width:100%;height:100%}
+#video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);z-index:1}
+#overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;pointer-events:none}
+.zone{position:absolute;top:0;height:100%;border:2px dashed rgba(255,255,255,0.1);transition:background .15s}
+#zone-left{left:0;width:35%}
+#zone-center{left:35%;width:30%}
+#zone-right{left:65%;width:35%}
+.zone.active-left{background:rgba(255,50,50,0.3);border-color:#ff3333}
+.zone.active-center{background:rgba(50,255,50,0.3);border-color:#33ff33}
+.zone.active-right{background:rgba(255,50,50,0.3);border-color:#ff3333}
+#hud{position:absolute;top:0;left:0;width:100%;padding:12px 16px;display:flex;justify-content:space-between;align-items:flex-start;z-index:10;pointer-events:auto;background:linear-gradient(to bottom,rgba(0,0,0,0.7),transparent)}
+#status-pill{background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:8px 14px;font-size:12px;display:flex;align-items:center;gap:8px}
+.dot{width:10px;height:10px;border-radius:50%;background:#666}
+.dot.connected{background:#33ff33;box-shadow:0 0 10px #33ff33}
+.dot.connecting{background:#ffaa00;animation:pulse 1s infinite}
+.dot.error{background:#ff3333}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
+#big-indicator{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;z-index:5}
+#big-indicator h1{font-size:52px;font-weight:900;letter-spacing:3px;text-shadow:0 0 30px rgba(0,0,0,1),0 2px 4px rgba(0,0,0,.9);transition:color .15s}
+#big-indicator .sub{font-size:16px;opacity:.9;margin-top:10px;background:rgba(0,0,0,.5);padding:6px 16px;border-radius:12px;display:inline-block}
+#char-sent{position:absolute;top:60%;left:50%;transform:translateX(-50%);font-size:28px;font-weight:700;color:#ffdd00;background:rgba(0,0,0,.6);padding:10px 24px;border-radius:14px;font-family:monospace;letter-spacing:6px;z-index:5}
+#controls{position:absolute;bottom:0;left:0;width:100%;padding:14px;padding-bottom:max(14px,env(safe-area-inset-bottom));display:flex;justify-content:center;gap:8px;z-index:10;pointer-events:auto;background:linear-gradient(to top,rgba(0,0,0,.85),transparent);flex-wrap:wrap}
+.btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;padding:12px 16px;border-radius:14px;font-size:13px;font-weight:700;cursor:pointer;backdrop-filter:blur(10px);transition:all .12s;min-width:64px;text-align:center;-webkit-appearance:none}
+.btn:active{transform:scale(.92)}
+.btn.primary{background:#2563eb;border-color:#2563eb}
+.btn.success{background:#16a34a;border-color:#16a34a}
+.btn.warning{background:#d97706;border-color:#d97706}
+.btn.danger{background:#dc2626;border-color:#dc2626}
+#manual-controls{display:none;gap:8px}
+#manual-controls.visible{display:flex}
+#settings-panel{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.95);z-index:100;display:none;flex-direction:column;padding:20px;overflow-y:auto}
+#settings-panel.visible{display:flex}
+#settings-panel h2{margin-bottom:20px;font-size:24px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:12px;opacity:.6;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px}
+.field input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#fff;padding:14px 16px;border-radius:12px;font-size:20px;font-family:monospace;text-transform:uppercase;text-align:center}
+#close-settings{margin-top:auto;margin-bottom:20px}
+#start-screen{position:absolute;top:0;left:0;width:100%;height:100%;background:#000;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px}
+#start-screen h1{font-size:48px;margin-bottom:12px;background:linear-gradient(90deg,#33ff33,#2563eb);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+#start-screen p{opacity:.5;margin-bottom:40px;max-width:300px;line-height:1.5}
+#start-btn{background:#2563eb;color:#fff;border:none;padding:18px 56px;border-radius:16px;font-size:18px;font-weight:800;cursor:pointer;box-shadow:0 0 30px rgba(37,99,235,.4)}
+#start-btn:active{transform:scale(.95)}
+#start-screen .small{margin-top:24px;font-size:11px;opacity:.3;max-width:280px}
+#model-loading{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.9);padding:30px 40px;border-radius:20px;text-align:center;z-index:50;display:none;border:1px solid rgba(255,255,255,.1)}
+.spinner{width:44px;height:44px;border:3px solid rgba(255,255,255,.15);border-top-color:#2563eb;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div id="start-screen">
+  <h1>🤖 ROBOT OJOS</h1>
+  <p>Detección de persona con cámara + Bluetooth BLE para carroza</p>
+  <button id="start-btn">INICIAR CÁMARA</button>
+  <p class="small">Usa Chrome en Android. Requiere permisos de cámara y Bluetooth. Se sirve por HTTPS (GitHub Pages).</p>
+</div>
+
+<div id="app" style="display:none">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="overlay"></canvas>
+  <div class="zone" id="zone-left"></div>
+  <div class="zone" id="zone-center"></div>
+  <div class="zone" id="zone-right"></div>
+
+  <div id="hud">
+    <div id="status-pill">
+      <div class="dot" id="bt-dot"></div>
+      <span id="bt-text">BLE: Desconectado</span>
+    </div>
+  </div>
+
+  <div id="big-indicator">
+    <h1 id="position-text">SIN DETECTAR</h1>
+    <div class="sub" id="confidence-text">Esperando persona...</div>
+  </div>
+  <div id="char-sent">-</div>
+
+  <div id="controls">
+    <button class="btn primary" id="btn-ble">🔗 BLE</button>
+    <button class="btn" id="btn-mode">AUTO</button>
+    <button class="btn" id="btn-follow">MIRAR</button>
+    <div id="manual-controls">
+      <button class="btn danger" id="btn-L">L</button>
+      <button class="btn success" id="btn-C">C</button>
+      <button class="btn danger" id="btn-R">R</button>
+    </div>
+    <button class="btn" id="btn-settings">⚙️</button>
+  </div>
+</div>
+
+<div id="settings-panel">
+  <h2>⚙️ Comandos (1 letra)</h2>
+  <div class="field"><label>Izquierda</label><input id="cfg-left" maxlength="1" value="L"></div>
+  <div class="field"><label>Centro</label><input id="cfg-center" maxlength="1" value="C"></div>
+  <div class="field"><label>Derecha</label><input id="cfg-right" maxlength="1" value="R"></div>
+  <div class="field"><label>Seguir</label><input id="cfg-follow" maxlength="1" value="F"></div>
+  <div class="field"><label>Stop</label><input id="cfg-stop" maxlength="1" value="S"></div>
+  <div class="field"><label>Perdido</label><input id="cfg-lost" maxlength="1" value="X"></div>
+  <button class="btn primary" id="close-settings" style="width:100%">GUARDAR Y VOLVER</button>
+</div>
+
+<div id="model-loading">
+  <div class="spinner"></div>
+  <div>Cargando IA...</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.18.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+
+<script>
+const CONFIG={left:'L',center:'C',right:'R',follow:'F',stop:'S',lost:'X'};
+let isAuto=true,isFollowing=false,bleDevice=null,bleChar=null,model=null;
+let lastSent=' ',lastTime=0,videoStream=null;
+const SVC='6e400001-b5a3-f393-e0a9-e50e24dcca9e',CHR='6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+
+const video=document.getElementById('video'),canvas=document.getElementById('overlay'),ctx=canvas.getContext('2d');
+const startScreen=document.getElementById('start-screen'),app=document.getElementById('app');
+const posText=document.getElementById('position-text'),confText=document.getElementById('confidence-text'),charSent=document.getElementById('char-sent');
+const btDot=document.getElementById('bt-dot'),btText=document.getElementById('bt-text');
+const zL=document.getElementById('zone-left'),zC=document.getElementById('zone-center'),zR=document.getElementById('zone-right');
+
+document.getElementById('start-btn').addEventListener('click',async()=>{
+  document.getElementById('model-loading').style.display='block';
+  try{
+    await startCamera();
+    model=await cocoSsd.load();
+    document.getElementById('model-loading').style.display='none';
+    startScreen.style.display='none';app.style.display='block';
+    detectFrame();
+  }catch(e){alert('Error: '+e.message);}
+});
+
+async function startCamera(){
+  videoStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}});
+  video.srcObject=videoStream;await video.play();resizeCanvas();
+}
+function resizeCanvas(){canvas.width=video.videoWidth||window.innerWidth;canvas.height=video.videoHeight||window.innerHeight;}
+window.addEventListener('resize',resizeCanvas);
+
+async function detectFrame(){
+  if(!model||video.readyState<2){requestAnimationFrame(detectFrame);return;}
+  const preds=await model.detect(video);
+  const persons=preds.filter(p=>p.class==='person').sort((a,b)=>(b.bbox[2]*b.bbox[3])-(a.bbox[2]*a.bbox[3]));
+  const person=persons[0];
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  zL.className='zone';zC.className='zone';zR.className='zone';
+  if(person){
+    const[x,y,w,h]=person.bbox,cx=(x+w/2)/canvas.width;
+    ctx.strokeStyle='#33ff33';ctx.lineWidth=3;ctx.strokeRect(x,y,w,h);
+    ctx.fillStyle='rgba(51,255,51,.12)';ctx.fillRect(x,y,w,h);
+    ctx.fillStyle='#33ff33';ctx.font='bold 13px sans-serif';ctx.fillText('PERSONA '+(person.score*100).toFixed(0)+'%',x,y-6);
+    let pos,color,cmd;
+    if(cx<.35){pos='IZQUIERDA';color='#ff3333';cmd=isFollowing?CONFIG.follow:CONFIG.left;zL.className='zone active-left';}
+    else if(cx>.65){pos='DERECHA';color='#ff3333';cmd=isFollowing?CONFIG.follow:CONFIG.right;zR.className='zone active-right';}
+    else{pos='CENTRO';color='#33ff33';cmd=isFollowing?CONFIG.follow:CONFIG.center;zC.className='zone active-center';}
+    posText.textContent=pos;posText.style.color=color;confText.textContent='Confianza: '+(person.score*100).toFixed(0)+'%';
+    if(isAuto)sendChar(cmd);
+  }else{
+    posText.textContent='SIN DETECTAR';posText.style.color='#888';confText.textContent='Esperando persona...';
+    if(isAuto)sendChar(CONFIG.lost);
+  }
+  requestAnimationFrame(detectFrame);
+}
+
+async function connectBLE(){
+  if(!navigator.bluetooth){alert('Usa Chrome en Android. Web Bluetooth no disponible.');return;}
+  try{
+    btDot.className='dot connecting';btText.textContent='BLE: Buscando...';
+    bleDevice=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:[SVC]});
+    const server=await bleDevice.gatt.connect();
+    const service=await server.getPrimaryService(SVC);
+    bleChar=await service.getCharacteristic(CHR);
+    btDot.className='dot connected';btText.textContent='BLE: '+bleDevice.name;
+  }catch(e){btDot.className='dot error';btText.textContent='BLE: Error';}
+}
+function sendChar(c){
+  const now=Date.now();if(now-lastTime<150||c===lastSent||!bleChar)return;
+  const enc=new TextEncoder();
+  bleChar.writeValue(enc.encode(c)).then(()=>{lastSent=c;lastTime=now;charSent.textContent=c;}).catch(()=>{btDot.className='dot error';btText.textContent='BLE: Perdido';});
+}
+
+document.getElementById('btn-ble').addEventListener('click',connectBLE);
+document.getElementById('btn-mode').addEventListener('click',()=>{isAuto=!isAuto;const b=document.getElementById('btn-mode');b.textContent=isAuto?'AUTO':'MANUAL';b.classList.toggle('active',!isAuto);document.getElementById('manual-controls').classList.toggle('visible',!isAuto);});
+document.getElementById('btn-follow').addEventListener('click',()=>{isFollowing=!isFollowing;const b=document.getElementById('btn-follow');b.textContent=isFollowing?'SEGUIR':'MIRAR';b.classList.toggle('warning',isFollowing);});
+['L','C','R'].forEach(c=>document.getElementById('btn-'+c).addEventListener('click',()=>{sendChar(c);charSent.textContent=c;}));
+const sp=document.getElementById('settings-panel');
+document.getElementById('btn-settings').addEventListener('click',()=>sp.classList.add('visible'));
+document.getElementById('close-settings').addEventListener('click',()=>{
+  CONFIG.left=document.getElementById('cfg-left').value.toUpperCase()||'L';
+  CONFIG.center=document.getElementById('cfg-center').value.toUpperCase()||'C';
+  CONFIG.right=document.getElementById('cfg-right').value.toUpperCase()||'R';
+  CONFIG.follow=document.getElementById('cfg-follow').value.toUpperCase()||'F';
+  CONFIG.stop=document.getElementById('cfg-stop').value.toUpperCase()||'S';
+  CONFIG.lost=document.getElementById('cfg-lost').value.toUpperCase()||'X';
+  sp.classList.remove('visible');
+});
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
+</script>
+</body>
+</html>
