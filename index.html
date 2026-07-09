@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Robot Ojos v3</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;overflow:hidden;touch-action:none;-webkit-tap-highlight-color:transparent}
+#app{position:relative;width:100%;height:100%}
+#video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:1}
+#proc-canvas{display:none}
+#debug-canvas{position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;pointer-events:none}
+.zone{position:absolute;top:0;height:100%;border:2px dashed rgba(255,255,255,0.08);transition:background .1s;pointer-events:none;z-index:3}
+#zone-left{left:0;width:35%}
+#zone-center{left:35%;width:30%}
+#zone-right{left:65%;width:35%}
+.zone.active-left{background:rgba(255,50,50,0.25);border-color:#ff3333}
+.zone.active-center{background:rgba(50,255,50,0.25);border-color:#33ff33}
+.zone.active-right{background:rgba(255,50,50,0.25);border-color:#ff3333}
+#version-badge{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:15;background:#ff0055;color:#fff;padding:4px 16px;border-radius:20px;font-size:13px;font-weight:900;letter-spacing:2px;box-shadow:0 0 15px rgba(255,0,85,0.5);pointer-events:none}
+#hud{position:absolute;top:36px;left:0;width:100%;padding:6px 14px;display:flex;justify-content:space-between;align-items:flex-start;z-index:10;pointer-events:auto;background:linear-gradient(to bottom,rgba(0,0,0,0.5),transparent)}
+#status-pill{background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:6px 12px;font-size:11px;display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:#666}
+.dot.connected{background:#33ff33;box-shadow:0 0 8px #33ff33}
+.dot.connecting{background:#ffaa00;animation:pulse 1s infinite}
+.dot.error{background:#ff3333}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
+#big-indicator{position:absolute;top:42%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;z-index:5}
+#big-indicator h1{font-size:44px;font-weight:900;letter-spacing:2px;text-shadow:0 0 25px rgba(0,0,0,1),0 2px 4px rgba(0,0,0,.9);transition:color .1s}
+#big-indicator .sub{font-size:14px;opacity:.85;margin-top:8px;background:rgba(0,0,0,.45);padding:4px 12px;border-radius:10px;display:inline-block}
+#char-sent{position:absolute;top:56%;left:50%;transform:translateX(-50%);font-size:22px;font-weight:700;color:#ffdd00;background:rgba(0,0,0,.5);padding:8px 18px;border-radius:12px;font-family:monospace;letter-spacing:4px;z-index:5}
+#controls{position:absolute;bottom:0;left:0;width:100%;padding:10px;padding-bottom:max(10px,env(safe-area-inset-bottom));display:flex;justify-content:center;gap:6px;z-index:10;pointer-events:auto;background:linear-gradient(to top,rgba(0,0,0,.75),transparent);flex-wrap:wrap}
+.btn{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;padding:10px 14px;border-radius:12px;font-size:12px;font-weight:700;cursor:pointer;backdrop-filter:blur(8px);transition:all .1s;min-width:56px;text-align:center;-webkit-appearance:none}
+.btn:active{transform:scale(.92)}
+.btn.primary{background:#2563eb;border-color:#2563eb}
+.btn.success{background:#16a34a;border-color:#16a34a}
+.btn.warning{background:#d97706;border-color:#d97706}
+.btn.danger{background:#dc2626;border-color:#dc2626}
+.btn.active{background:#be4bdb;border-color:#be4bdb}
+#manual-controls{display:none;gap:6px}
+#manual-controls.visible{display:flex}
+#settings-panel{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.93);z-index:100;display:none;flex-direction:column;padding:16px;overflow-y:auto}
+#settings-panel.visible{display:flex}
+#settings-panel h2{margin-bottom:14px;font-size:20px}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:11px;opacity:.55;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px}
+.field input{width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);color:#fff;padding:10px 12px;border-radius:10px;font-size:16px;font-family:monospace;text-align:center}
+.field input[type="range"]{padding:0;height:36px}
+#close-settings{margin-top:auto;margin-bottom:10px}
+#start-screen{position:absolute;top:0;left:0;width:100%;height:100%;background:#000;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}
+#start-screen h1{font-size:42px;margin-bottom:10px;background:linear-gradient(90deg,#33ff33,#2563eb);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+#start-screen .version-tag{background:#ff0055;color:#fff;padding:4px 16px;border-radius:20px;font-size:14px;font-weight:900;margin-bottom:16px;letter-spacing:2px}
+#start-screen p{opacity:.5;margin-bottom:32px;max-width:280px;line-height:1.5;font-size:14px}
+#start-btn{background:#2563eb;color:#fff;border:none;padding:16px 48px;border-radius:14px;font-size:17px;font-weight:800;cursor:pointer;box-shadow:0 0 25px rgba(37,99,235,.35)}
+#start-btn:active{transform:scale(.95)}
+#start-screen .small{margin-top:18px;font-size:10px;opacity:.3;max-width:260px}
+#color-preview{position:absolute;top:80px;right:12px;z-index:10;width:32px;height:32px;border-radius:50%;border:2px solid rgba(255,255,255,.3);display:none}
+#color-preview.visible{display:block}
+#fps-counter{position:absolute;top:80px;left:12px;z-index:10;font-size:11px;opacity:.5;font-family:monospace}
+</style>
+</head>
+<body>
+
+<div id="start-screen">
+  <div class="version-tag">V3 - COLOR TRACKING</div>
+  <h1>🤖 ROBOT OJOS</h1>
+  <p>Sin espejo. Toca el objeto para bloquear color. Optimizado.</p>
+  <button id="start-btn">INICIAR CAMARA</button>
+  <p class="small">Chrome Android + HTTPS. Usa objeto de color puro (naranja, rosa, verde neon).</p>
+</div>
+
+<div id="app" style="display:none">
+  <div id="version-badge">V3 - COLOR TRACKING</div>
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="proc-canvas"></canvas>
+  <canvas id="debug-canvas"></canvas>
+  <div class="zone" id="zone-left"></div>
+  <div class="zone" id="zone-center"></div>
+  <div class="zone" id="zone-right"></div>
+
+  <div id="hud">
+    <div id="status-pill">
+      <div class="dot" id="bt-dot"></div>
+      <span id="bt-text">BLE: OFF</span>
+    </div>
+  </div>
+
+  <div id="color-preview"></div>
+  <div id="fps-counter">FPS: --</div>
+
+  <div id="big-indicator">
+    <h1 id="position-text">SIN DETECTAR</h1>
+    <div class="sub" id="confidence-text">Toca el objeto para bloquear color</div>
+  </div>
+  <div id="char-sent">-</div>
+
+  <div id="controls">
+    <button class="btn primary" id="btn-ble">🔗 BLE</button>
+    <button class="btn" id="btn-mode">AUTO</button>
+    <button class="btn" id="btn-follow">MIRAR</button>
+    <div id="manual-controls">
+      <button class="btn danger" id="btn-L">L</button>
+      <button class="btn success" id="btn-C">C</button>
+      <button class="btn danger" id="btn-R">R</button>
+    </div>
+    <button class="btn" id="btn-settings">⚙️</button>
+  </div>
+</div>
+
+<div id="settings-panel">
+  <h2>⚙️ Configuracion V3</h2>
+  <div class="field"><label>Color Hue (0-360)</label><input type="range" id="cfg-hue" min="0" max="360" value="30"><div style="text-align:center;font-size:12px;opacity:.5" id="hue-val">30</div></div>
+  <div class="field"><label>Tolerancia Hue</label><input type="range" id="cfg-tol" min="5" max="80" value="30"><div style="text-align:center;font-size:12px;opacity:.5" id="tol-val">30</div></div>
+  <div class="field"><label>Saturacion minima (%)</label><input type="range" id="cfg-sat" min="10" max="100" value="25"><div style="text-align:center;font-size:12px;opacity:.5" id="sat-val">25</div></div>
+  <div class="field"><label>Brillo minimo (%)</label><input type="range" id="cfg-val" min="10" max="100" value="20"><div style="text-align:center;font-size:12px;opacity:.5" id="val-val">20</div></div>
+  <div class="field"><label>Area minima</label><input type="range" id="cfg-area" min="200" max="3000" value="400"><div style="text-align:center;font-size:12px;opacity:.5" id="area-val">400</div></div>
+  <div class="field"><label>Comando Izq</label><input id="cfg-left" maxlength="1" value="L"></div>
+  <div class="field"><label>Comando Centro</label><input id="cfg-center" maxlength="1" value="C"></div>
+  <div class="field"><label>Comando Der</label><input id="cfg-right" maxlength="1" value="R"></div>
+  <div class="field"><label>Comando Follow</label><input id="cfg-follow" maxlength="1" value="F"></div>
+  <div class="field"><label>Comando Stop</label><input id="cfg-stop" maxlength="1" value="S"></div>
+  <div class="field"><label>Comando Perdido</label><input id="cfg-lost" maxlength="1" value="X"></div>
+  <button class="btn primary" id="close-settings" style="width:100%">GUARDAR Y VOLVER</button>
+</div>
+
+<script>
+// ============ V3 - COLOR TRACKING ============
+let CONFIG={left:'L',center:'C',right:'R',follow:'F',stop:'S',lost:'X'};
+let HUE=30, TOL=30, SAT_MIN=25, VAL_MIN=20, AREA_MIN=400;
+let isAuto=true, isFollowing=false, isLocked=false;
+let bleDevice=null, bleChar=null, lastSent=' ', lastTime=0;
+let videoStream=null;
+let procW=160, procH=120; // MUY baja resolucion para velocidad
+const SVC='6e400001-b5a3-f393-e0a9-e50e24dcca9e', CHR='6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+
+const video=document.getElementById('video');
+const procCanvas=document.getElementById('proc-canvas');
+const procCtx=procCanvas.getContext('2d',{willReadFrequently:true,alpha:false});
+const debugCanvas=document.getElementById('debug-canvas');
+const debugCtx=debugCanvas.getContext('2d');
+const startScreen=document.getElementById('start-screen'), app=document.getElementById('app');
+const posText=document.getElementById('position-text'), confText=document.getElementById('confidence-text'), charSent=document.getElementById('char-sent');
+const btDot=document.getElementById('bt-dot'), btText=document.getElementById('bt-text');
+const zL=document.getElementById('zone-left'), zC=document.getElementById('zone-center'), zR=document.getElementById('zone-right');
+const colorPreview=document.getElementById('color-preview'), fpsCounter=document.getElementById('fps-counter');
+
+let lastFrameTime=0, frameCount=0, fps=0, skipCounter=0;
+
+// ============ START ============
+document.getElementById('start-btn').addEventListener('click', async ()=>{
+  try{
+    await startCamera();
+    startScreen.style.display='none'; app.style.display='block';
+    procCanvas.width=procW; procCanvas.height=procH;
+    resizeDebug();
+    requestAnimationFrame(processFrame);
+  }catch(e){alert('Error camara: '+e.message);}
+});
+
+async function startCamera(){
+  videoStream=await navigator.mediaDevices.getUserMedia({
+    video:{facingMode:'environment',width:{ideal:640},height:{ideal:480}}
+  });
+  video.srcObject=videoStream; await video.play();
+}
+
+function resizeDebug(){
+  debugCanvas.width=window.innerWidth;
+  debugCanvas.height=window.innerHeight;
+}
+window.addEventListener('resize',resizeDebug);
+
+// ============ COLOR PICKER ============
+video.addEventListener('click', (e)=>{
+  if(!isLocked){
+    const rect=video.getBoundingClientRect();
+    const x=(e.clientX-rect.left)/rect.width;
+    const y=(e.clientY-rect.top)/rect.height;
+    pickColor(x,y);
+  }
+});
+
+function pickColor(nx,ny){
+  const sx=Math.floor(nx*procW), sy=Math.floor(ny*procH);
+  const sampleW=16, sampleH=16;
+  const sx0=Math.max(0,sx-sampleW/2), sy0=Math.max(0,sy-sampleH/2);
+  const sw=Math.min(sampleW,procW-sx0), sh=Math.min(sampleH,procH-sy0);
+  if(sw<2||sh<2)return;
+
+  procCtx.drawImage(video,0,0,procW,procH);
+  const imgData=procCtx.getImageData(sx0,sy0,sw,sh).data;
+  let r=0,g=0,b=0,c=0;
+  for(let i=0;i<imgData.length;i+=4){
+    r+=imgData[i]; g+=imgData[i+1]; b+=imgData[i+2]; c++;
+  }
+  r=Math.round(r/c); g=Math.round(g/c); b=Math.round(b/c);
+  const hsv=rgb2hsv(r,g,b);
+  HUE=Math.round(hsv.h);
+  SAT_MIN=Math.max(15,Math.round(hsv.s*0.5));
+  VAL_MIN=Math.max(15,Math.round(hsv.v*0.5));
+  isLocked=true;
+
+  colorPreview.style.background=`rgb(${r},${g},${b})`;
+  colorPreview.classList.add('visible');
+  document.getElementById('cfg-hue').value=HUE;
+  document.getElementById('hue-val').textContent=HUE;
+  document.getElementById('cfg-sat').value=SAT_MIN;
+  document.getElementById('sat-val').textContent=SAT_MIN;
+  document.getElementById('cfg-val').value=VAL_MIN;
+  document.getElementById('val-val').textContent=VAL_MIN;
+  confText.textContent='COLOR BLOQUEADO - Hue:'+HUE;
+}
+
+function rgb2hsv(r,g,b){
+  r/=255; g/=255; b/=255;
+  const max=Math.max(r,g,b), min=Math.min(r,g,b), d=max-min;
+  let h=0,s=0,v=max;
+  if(d!==0){
+    s=d/max;
+    if(max===r) h=((g-b)/d+(g<b?6:0))/6;
+    else if(max===g) h=((b-r)/d+2)/6;
+    else h=((r-g)/d+4)/6;
+  }
+  return {h:h*360,s:s*100,v:v*100};
+}
+
+// ============ DETECCION OPTIMIZADA ============
+function processFrame(){
+  skipCounter++;
+  // FPS counter
+  const now=performance.now();
+  frameCount++;
+  if(now-lastFrameTime>=1000){fps=frameCount; frameCount=0; lastFrameTime=now; fpsCounter.textContent='FPS:'+fps;}
+
+  if(video.readyState>=2){
+    // Procesar solo 1 de cada 2 frames para velocidad
+    if(skipCounter%2===0){
+      procCtx.drawImage(video,0,0,procW,procH);
+      if(isLocked){
+        const result=findColorBlobFast();
+        debugCtx.clearRect(0,0,debugCanvas.width,debugCanvas.height);
+        if(result){
+          const scaleX=window.innerWidth/procW, scaleY=window.innerHeight/procH;
+          const dx=result.x*scaleX, dy=result.y*scaleY, dw=result.w*scaleX, dh=result.h*scaleY;
+          const cx=result.cx/procW;
+
+          // Dibujar caja en debug
+          debugCtx.strokeStyle='#33ff33'; debugCtx.lineWidth=3;
+          debugCtx.strokeRect(dx,dy,dw,dh);
+          debugCtx.fillStyle='rgba(51,255,51,0.15)'; debugCtx.fillRect(dx,dy,dw,dh);
+
+          let pos,color,cmd;
+          if(cx<0.35){pos='IZQUIERDA';color='#ff3333';cmd=isFollowing?CONFIG.follow:CONFIG.left;zL.className='zone active-left';zC.className='zone';zR.className='zone';}
+          else if(cx>0.65){pos='DERECHA';color='#ff3333';cmd=isFollowing?CONFIG.follow:CONFIG.right;zR.className='zone active-right';zL.className='zone';zC.className='zone';}
+          else{pos='CENTRO';color='#33ff33';cmd=isFollowing?CONFIG.follow:CONFIG.center;zC.className='zone active-center';zL.className='zone';zR.className='zone';}
+          posText.textContent=pos; posText.style.color=color;
+          confText.textContent='Area:'+result.area+' Hue:'+HUE;
+          if(isAuto) sendChar(cmd);
+        }else{
+          posText.textContent='SIN DETECTAR'; posText.style.color='#888'; confText.textContent='Color no encontrado';
+          zL.className='zone'; zC.className='zone'; zR.className='zone';
+          if(isAuto) sendChar(CONFIG.lost);
+        }
+      }else{
+        posText.textContent='SIN BLOQUEO'; posText.style.color='#888'; confText.textContent='Toca el objeto en pantalla';
+        zL.className='zone'; zC.className='zone'; zR.className='zone';
+      }
+    }
+  }
+  requestAnimationFrame(processFrame);
+}
+
+function findColorBlobFast(){
+  const imgData=procCtx.getImageData(0,0,procW,procH).data;
+  let minX=procW, minY=procH, maxX=0, maxY=0, count=0, sumX=0, sumY=0;
+
+  // Samplear cada 3 pixeles para maxima velocidad
+  for(let y=0;y<procH;y+=3){
+    const rowOff=y*procW*4;
+    for(let x=0;x<procW;x+=3){
+      const i=rowOff+x*4;
+      const r=imgData[i], g=imgData[i+1], b=imgData[i+2];
+      const hsv=rgb2hsvFast(r,g,b);
+      if(hueMatch(hsv.h,HUE,TOL) && hsv.s>=SAT_MIN && hsv.v>=VAL_MIN){
+        if(x<minX)minX=x; if(x>maxX)maxX=x;
+        if(y<minY)minY=y; if(y>maxY)maxY=y;
+        sumX+=x; sumY+=y; count++;
+      }
+    }
+  }
+
+  if(count<AREA_MIN/9) return null;
+  const w=maxX-minX, h=maxY-minY;
+  if(w<8||h<8) return null;
+  return {x:minX,y:minY,w:w,h:h,cx:sumX/count,cy:sumY/count,area:count*9};
+}
+
+// Version rapida de rgb2hsv sin divisiones
+function rgb2hsvFast(r,g,b){
+  const max=(r>g?(r>b?r:b):(g>b?g:b));
+  const min=(r<g?(r<b?r:b):(g<b?g:b));
+  const d=max-min;
+  let h=0,s=0;
+  if(d!==0){
+    s=(d*100)/max;
+    if(max===r) h=((g-b)*60)/d+(g<b?360:0);
+    else if(max===g) h=(((b-r)*60)/d)+120;
+    else h=(((r-g)*60)/d)+240;
+  }
+  return {h:h,s:s,v:(max*100)/255};
+}
+
+function hueMatch(h,target,tol){
+  let d=h-target;
+  if(d<0) d=-d;
+  if(d>180) d=360-d;
+  return d<=tol;
+}
+
+// ============ BLE ============
+async function connectBLE(){
+  if(!navigator.bluetooth){alert('Usa Chrome Android');return;}
+  try{
+    btDot.className='dot connecting'; btText.textContent='BLE...';
+    bleDevice=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:[SVC]});
+    const server=await bleDevice.gatt.connect();
+    const service=await server.getPrimaryService(SVC);
+    bleChar=await service.getCharacteristic(CHR);
+    btDot.className='dot connected'; btText.textContent='BLE:'+bleDevice.name;
+  }catch(e){btDot.className='dot error'; btText.textContent='BLE:ERR';}
+}
+function sendChar(c){
+  const now=Date.now(); if(now-lastTime<100||c===lastSent||!bleChar) return;
+  const enc=new TextEncoder();
+  bleChar.writeValue(enc.encode(c)).then(()=>{lastSent=c;lastTime=now;charSent.textContent=c;})
+  .catch(()=>{btDot.className='dot error';btText.textContent='BLE:PERDIDO';});
+}
+
+// ============ CONTROLES ============
+document.getElementById('btn-ble').addEventListener('click',connectBLE);
+document.getElementById('btn-mode').addEventListener('click',()=>{isAuto=!isAuto;const b=document.getElementById('btn-mode');b.textContent=isAuto?'AUTO':'MANUAL';b.classList.toggle('active',!isAuto);document.getElementById('manual-controls').classList.toggle('visible',!isAuto);});
+document.getElementById('btn-follow').addEventListener('click',()=>{isFollowing=!isFollowing;const b=document.getElementById('btn-follow');b.textContent=isFollowing?'SEGUIR':'MIRAR';b.classList.toggle('warning',isFollowing);});
+['L','C','R'].forEach(c=>document.getElementById('btn-'+c).addEventListener('click',()=>{sendChar(c);charSent.textContent=c;}));
+
+const sp=document.getElementById('settings-panel');
+document.getElementById('btn-settings').addEventListener('click',()=>sp.classList.add('visible'));
+document.getElementById('close-settings').addEventListener('click',()=>{
+  HUE=parseInt(document.getElementById('cfg-hue').value);
+  TOL=parseInt(document.getElementById('cfg-tol').value);
+  SAT_MIN=parseInt(document.getElementById('cfg-sat').value);
+  VAL_MIN=parseInt(document.getElementById('cfg-val').value);
+  AREA_MIN=parseInt(document.getElementById('cfg-area').value);
+  CONFIG.left=document.getElementById('cfg-left').value.toUpperCase()||'L';
+  CONFIG.center=document.getElementById('cfg-center').value.toUpperCase()||'C';
+  CONFIG.right=document.getElementById('cfg-right').value.toUpperCase()||'R';
+  CONFIG.follow=document.getElementById('cfg-follow').value.toUpperCase()||'F';
+  CONFIG.stop=document.getElementById('cfg-stop').value.toUpperCase()||'S';
+  CONFIG.lost=document.getElementById('cfg-lost').value.toUpperCase()||'X';
+  sp.classList.remove('visible');
+});
+
+['hue','tol','sat','val','area'].forEach(id=>{
+  document.getElementById('cfg-'+id).addEventListener('input',function(){
+    document.getElementById(id+'-val').textContent=this.value;
+  });
+});
+
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+</script>
+</body>
+</html>
